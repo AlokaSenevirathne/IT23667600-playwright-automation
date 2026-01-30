@@ -250,10 +250,18 @@ test('Neg_Fun_0010 – Valid sentence repeated', async ({ page }) => {
 
 /* ===================== UI TEST CASE ===================== */
 
-test('Pos_UI_0001 – Real-time typing behavior', async ({ page }) => {
+test('Pos_UI_0001 – Clear input button functionality', async ({ page }) => {
   const input = getInputBox(page);
-  await input.type('mama');
-  await page.waitForTimeout(500);
-  await input.type(' gedhara yanavaa');
+
+  // Enter text
+  await input.fill('mama gedhara yanavaa');
   await expect(input).toHaveValue('mama gedhara yanavaa');
+
+  // Click clear button
+  const clearButton = page.locator('button:has-text("Clear")');
+  await clearButton.click();
+
+  // Verify input is cleared
+  await expect(input).toHaveValue('');
 });
+

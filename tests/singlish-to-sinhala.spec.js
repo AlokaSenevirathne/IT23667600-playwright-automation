@@ -2,23 +2,28 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
+  /**
+   * Navigate before each test.
+   * @param {import('@playwright/test').Page} page
+   */
   test.beforeEach(async ({ page }) => {
     await page.goto('https://www.swifttranslator.com/', { waitUntil: 'domcontentloaded' });
   });
 
   /**
    * Singlish input box (LEFT textarea)
+   * @param {import('@playwright/test').Page} page
    */
   const getInputBox = (page) => page.locator('textarea').first();
 
-  /**
-   * Sinhala characters regex (U+0D80–U+0DFF)
-   */
+  /** Sinhala characters regex (U+0D80–U+0DFF) */
   const SINHALA_REGEX = /[\u0D80-\u0DFF]/g;
 
   /**
-   * Utility: Count Sinhala chars in a selector's textContent.
-   * Uses 'body' to be resilient to page structure. We then assert deltas.
+   * Count Sinhala chars in a selector's textContent.
+   * @param {import('@playwright/test').Page} page
+   * @param {string} [selector='body']
+   * @returns {Promise<number>}
    */
   async function countSinhalaIn(page, selector = 'body') {
     const text = (await page.textContent(selector)) || '';
@@ -27,21 +32,24 @@ test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
   }
 
   /**
-   * Perform input action and wait a tick for translation
+   * Type into input and wait a bit for translation to render.
+   * @param {import('@playwright/test').Page} page
+   * @param {string} text
+   * @returns {Promise<void>}
    */
   async function performInputAndSettle(page, text) {
     const input = getInputBox(page);
     await input.click({ force: true });
-    await input.fill(''); // clear just in case
-    await input.type(text, { delay: 20 }); // small delay to simulate real typing
-    // Nudge any on-change/on-input logic
+    await input.fill('');
+    await input.type(text, { delay: 20 }); // simulate real typing
     await input.press('Enter').catch(() => {});
-    // Give the app time to render translated output
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000); // allow app to render output
   }
 
   /**
-   * Expect Sinhala to appear (delta-based)
+   * Expect Sinhala to increase on the page (delta-based).
+   * @param {import('@playwright/test').Page} page
+   * @param {string} text
    */
   async function expectSinhalaOutput(page, text) {
     const before = await countSinhalaIn(page, 'body');
@@ -51,17 +59,15 @@ test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
   }
 
   /**
-   * Expect NO new Sinhala to appear (delta-based)
-   * This passes if the page does not add new Sinhala text for invalid inputs.
+   * Expect NO increase of Sinhala on the page (delta-based).
+   * @param {import('@playwright/test').Page} page
+   * @param {string} text
    */
   async function expectNoSinhalaIncrease(page, text) {
     const before = await countSinhalaIn(page, 'body');
     await performInputAndSettle(page, text);
     const after = await countSinhalaIn(page, 'body');
-    expect(
-      after,
-      `Expected NO additional Sinhala characters for invalid input: "${text}"`
-    ).toBeLessThanOrEqual(before);
+    expect(after, `Expected NO additional Sinhala characters for invalid input: "${text}"`).toBeLessThanOrEqual(before);
   }
 
   /* ===================== POSITIVE FUNCTIONAL TEST CASES (24) ===================== */
@@ -163,8 +169,7 @@ test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
   });
 
   /* ===================== NEGATIVE FUNCTIONAL TEST CASES (10) ===================== */
-  // These now ASSERT that Sinhala output does NOT increase.
-  // If the app incorrectly produces Sinhala for these, the tests will FAIL (as desired).
+  // These assert that Sinhala does NOT increase for invalid/noise inputs.
 
   test('Neg_Fun_0001 – Misspelled word', async ({ page }) => {
     await expectNoSinhalaIncrease(page, 'mata bathh oonee.');
@@ -203,8 +208,8 @@ test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
   });
 
   test('Neg_Fun_0010 – Valid sentence repeated', async ({ page }) => {
-    // If the app translates this, the test will fail (negative scenario).
-    // You can repeat the same text twice if your intention is "repeated".
+    // If your product should not re-render or add extra Sinhala on repeated identical input,
+    // this negative makes sense; otherwise, consider moving it to positive.
     await expectNoSinhalaIncrease(page, 'mama gedhara yanavaa.');
   });
 
@@ -213,7 +218,8 @@ test.describe('SwiftTranslator – Singlish ➜ Sinhala', () => {
   test('Pos_UI_0001 – Clear input button functionality', async ({ page }) => {
     const input = getInputBox(page);
     await input.fill('mama gedhara yanavaa');
-    await page.locator('button:has-text("Clear")').first().click();
+    // More robust locator for the "Clear" button
+    await page.getByRole('button', { name: /clear/i }).first().click();
     await expect(input).toHaveValue('');
   });
 });
